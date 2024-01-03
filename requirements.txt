@@ -1,0 +1,5 @@
+bitcoin
+python-bitcoinlib
+cryptography
+paramiko
+setuptools
