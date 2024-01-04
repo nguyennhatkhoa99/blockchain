@@ -1,43 +1,46 @@
 from bitcoin import *
-from bitcoin.core import b2x, lx, CMutableTxIn, CMutableTxOut, COutPoint, CMutableTransaction, Hash160, COIN
-from bitcoin.wallet import CBitcoinSecret, CBitcoinAddress
-from bitcoin.core.scripteval import VerifyScript, SCRIPT_VERIFY_P2SH
+import requests
+from bitcoin.core import b2x, lx, CMutableTxIn, CMutableTxOut, COutPoint, CMutableTransaction, Hash160, COIN, CTxIn, CTxOut, CTransaction
+from bitcoin.wallet import CBitcoinSecret, CBitcoinAddress, P2PKHBitcoinAddress
+from bitcoin.core.scripteval import VerifyScript, SCRIPT_VERIFY_P2SH, SIGHASH_ALL
 from bitcoin.core.script import CScript, OP_CHECKSIG, OP_DUP, OP_HASH160, OP_EQUALVERIFY, SignatureHash
 from os import urandom
+import hashlib
 
+def broadcast_transaction(tx: CMutableTransaction):
+    raw_transaction = b2x(tx.serialize())
+    headers = {
+        'content-type': 'application/x-www-form-urlencoded'
+    }
+    return requests.post(
+        'https://api.blockcypher.com/v1/btc/test3/txs/push',
+        headers=headers,
+        data='{"tx": "%s"}' % raw_transaction
+    )
+    
 
-def main(n, amount):
+def main(amount):
     SelectParams('testnet')
-    private_key1 = CBitcoinSecret.from_secret_bytes(urandom(n))
+    private_key = CBitcoinSecret('cN99D4zT194CypQTuMhrrsbjRNjRFJ25qwTSHammF7uUgF2k4wYz')
 
-    public_key1 = private_key1.pub
+    public_key = private_key.pub
 
-    # address = P2PKHBitcoinAddress.from_pubkey(public_key1)
-    # print(b2x(address))
+    address = P2PKHBitcoinAddress.from_pubkey(public_key)
+    print(address)
 
     # Create a transaction input (UTXO)
-    txid = lx('bff785da9f8169f49be92fa95e31f0890c385bfb1bd24d6b94d7900057c617ae')
-    output_index = 0
-    txin = CMutableTxIn(COutPoint(txid, output_index))
-
+    txid = lx('cd81a0931237a99a6bcf954f6dbb474f44c2eca990b688d28420c581b5837959')
+    script_pubkey = CScript([OP_DUP, OP_HASH160, Hash160(private_key.pub), OP_EQUALVERIFY, OP_CHECKSIG])
+    vout = CTxOut(nValue=amount* COIN, scriptPubKey=script_pubkey)
+   
     # Create a transaction output to the desired destination
+    message_hash = hashlib.sha256(public_key).digest()
+    sig = private_key.sign(message_hash)
+    scriptSig =  CScript([sig, public_key])
+    vin = CTxIn(prevout=COutPoint(hash=txid, n=0), scriptSig=scriptSig)
+    txn = CTransaction(vin=[vin], vout=[vout], nLockTime=2570597)
 
-    destination_address = CBitcoinAddress('1C7zdTfnkzmr13HfA2vNm5SJYRK6nEKyq8').to_scriptPubKey()
-    amount = amount*COIN
-    txout = CMutableTxOut(amount, destination_address)
-
-    tx = CMutableTransaction([txin], [txout])
-
-    sig_script = CScript([
-        OP_DUP, 
-        OP_HASH160, 
-        Hash160(public_key1), 
-        OP_EQUALVERIFY, 
-        OP_CHECKSIG
-    ])
-    sighash = VerifyScript(txin.scriptSig, sig_script, tx, 0, (SCRIPT_VERIFY_P2SH,))
-
-    print(b2x(tx.serialize()))
+    print(b2x(txn.serialize()))
 
 if __name__ == "__main__":
-    main()
+    main(0.00007000)
